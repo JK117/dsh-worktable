@@ -55,7 +55,10 @@ window.__ModuleLoader__.load({
     const CSS = [
       'div:has(> [data-slot="sidebar.footer.action"] > .dsh-worktable),div:has(> * > [data-slot="sidebar.footer.action"] > .dsh-worktable){display:contents}',
       'div:has(> [data-slot="sidebar.workspaces"]){flex:2 1 0;min-height:0}',
-      '.dsh-worktable{box-sizing:border-box;display:flex;flex:1 1 0;flex-direction:column;width:100%;min-width:0;min-height:0;border-top:.5px solid var(--dsw-alias-border-l1);font-size:14px;line-height:20px;color:var(--dsw-alias-label-primary)}',
+      '.dsh-worktable{position:relative;box-sizing:border-box;display:flex;flex:1 1 0;flex-direction:column;width:100%;min-width:0;min-height:0;border-top:.5px solid var(--dsw-alias-border-l1);font-size:14px;line-height:20px;color:var(--dsw-alias-label-primary)}',
+      '.dsh-worktable__fade{position:absolute;z-index:1;left:0;right:0;bottom:100%;height:24px;pointer-events:none;opacity:0;background:linear-gradient(to bottom,transparent,var(--dsw-specific-sidebar-fill));transition:opacity .12s var(--ds-ease-in-out)}',
+      '.dsh-worktable__fade[data-visible="true"]{opacity:1}',
+      ':root:not([data-platform="darwin"]) .dsh-worktable__fade{display:none}',
       '.dsh-worktable__header{box-sizing:border-box;display:flex;flex:none;align-items:center;gap:4px;width:100%;min-width:0;height:36px;padding:0 4px;color:var(--dsw-alias-label-tertiary)}',
       '.dsh-worktable__label{flex:1;min-width:0;overflow:hidden;white-space:nowrap;text-overflow:ellipsis}',
       '.dsh-worktable__add{box-sizing:border-box;display:inline-flex;flex:none;align-items:center;justify-content:center;width:28px;height:28px;padding:0;border:0;border-radius:var(--dsw-radius-sm);background:transparent;color:var(--dsw-alias-label-secondary);cursor:pointer}',
@@ -67,7 +70,7 @@ window.__ModuleLoader__.load({
       '.dsh-worktable__tooltip[data-side="bottom"]{transform:translate(-50%)}',
       '.dsh-worktable__tooltip[data-side="top"]{transform:translate(-50%,-100%)}',
       '@keyframes dsh-worktable-tooltip-in{0%{opacity:0}}',
-      '@media (prefers-reduced-motion:reduce){.dsh-worktable__tooltip{animation:none}}',
+      '@media (prefers-reduced-motion:reduce){.dsh-worktable__tooltip{animation:none}.dsh-worktable__fade{transition:none}}',
     ].join('\n');
 
     /**
@@ -239,6 +242,104 @@ window.__ModuleLoader__.load({
     }
 
     /**
+     * Tracks whether the Workspaces scroller has content below its viewport.
+     *
+     * The shipped browser renders a bottom fade but hides it on macOS, and the
+     * workspace list now lives in a shorter pane, so this pane draws its own
+     * fade. The scroller is located by its computed overflow rather than by a
+     * hashed class name, and the watchers are rebound if the browser replaces
+     * its list. Only a scroll position at the very end hides the fade.
+     *
+     * @param wide - whether the sidebar renders its wide content.
+     * @returns true while the workspace content continues below the viewport.
+     */
+    function useWorkspaceOverflow(wide) {
+      const [overflowing, setOverflowing] = React.useState(false);
+
+      React.useEffect(() => {
+        if (!wide) {
+          setOverflowing(false);
+          return undefined;
+        }
+
+        const region = document.querySelector('[data-slot="sidebar.workspaces"]');
+        if (region === null) return undefined;
+
+        let scroller = null;
+        let resizeObserver = null;
+        let frame = 0;
+        let disposed = false;
+
+        function findScroller() {
+          let best = null;
+          for (const element of region.querySelectorAll('*')) {
+            const overflowY = getComputedStyle(element).overflowY;
+            if (overflowY !== 'auto' && overflowY !== 'scroll') continue;
+            if (element.clientHeight === 0) continue;
+            if (best === null || element.clientHeight > best.clientHeight) {
+              best = element;
+            }
+          }
+          return best;
+        }
+
+        function schedule() {
+          if (frame === 0) frame = requestAnimationFrame(measure);
+        }
+
+        function measure() {
+          frame = 0;
+          if (disposed) return;
+          if (scroller === null || !region.contains(scroller)) bind(findScroller());
+          if (scroller === null) {
+            setOverflowing(false);
+            return;
+          }
+          const hasMore = scroller.scrollHeight > scroller.clientHeight + 1;
+          const atBottom =
+            scroller.scrollTop + scroller.clientHeight >= scroller.scrollHeight - 1;
+          setOverflowing(hasMore && !atBottom);
+        }
+
+        function bind(next) {
+          if (scroller !== null) scroller.removeEventListener('scroll', schedule);
+          if (resizeObserver !== null) resizeObserver.disconnect();
+          scroller = next;
+          if (scroller === null) return;
+          scroller.addEventListener('scroll', schedule, { passive: true });
+          resizeObserver = new ResizeObserver(schedule);
+          resizeObserver.observe(scroller);
+        }
+
+        bind(findScroller());
+
+        // The browser can swap the scroller when its view changes, and list
+        // expansion or filtering changes the content height without a resize.
+        const observer = new MutationObserver(schedule);
+        observer.observe(region, {
+          childList: true,
+          subtree: true,
+          characterData: true,
+          attributes: true,
+          attributeFilter: ['class', 'style', 'aria-expanded', 'data-state'],
+        });
+        window.addEventListener('resize', schedule);
+        schedule();
+
+        return () => {
+          disposed = true;
+          if (frame !== 0) cancelAnimationFrame(frame);
+          observer.disconnect();
+          window.removeEventListener('resize', schedule);
+          if (resizeObserver !== null) resizeObserver.disconnect();
+          if (scroller !== null) scroller.removeEventListener('scroll', schedule);
+        };
+      }, [wide]);
+
+      return overflowing;
+    }
+
+    /**
      * The Worktable pane: a static header plus the list area.
      *
      * @param props - the slot's `wide` owner prop (`false` in the 56px rail)
@@ -246,6 +347,8 @@ window.__ModuleLoader__.load({
      * @returns the pane, or null while the sidebar is collapsed to its rail.
      */
     function WorktableSection({ wide, t }) {
+      const workspaceOverflowing = useWorkspaceOverflow(wide);
+
       // The rail has no room for a below-the-body pane.
       if (!wide) return null;
 
@@ -253,6 +356,12 @@ window.__ModuleLoader__.load({
         'div',
         { className: 'dsh-worktable', 'data-worktable': 'section' },
         h('style', { key: 'styles' }, CSS),
+        h('span', {
+          key: 'fade',
+          className: 'dsh-worktable__fade',
+          'data-visible': workspaceOverflowing ? 'true' : 'false',
+          'aria-hidden': 'true',
+        }),
         h(
           'div',
           { className: 'dsh-worktable__header' },
