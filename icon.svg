@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64" role="img" aria-label="Worktable">
+  <rect width="64" height="64" rx="14" fill="#1f6ff0"/>
+  <rect x="12.5" y="16.5" width="39" height="29" rx="5" fill="none" stroke="#ffffff" stroke-width="3.5"/>
+  <path d="M12.5 27.5h39M32 27.5v18" fill="none" stroke="#ffffff" stroke-width="3.5"/>
+  <circle cx="47" cy="46" r="10" fill="#ffffff"/>
+  <path d="M47 41.5v9M42.5 46h9" fill="none" stroke="#1f6ff0" stroke-width="3" stroke-linecap="round"/>
+</svg>
