@@ -2,7 +2,7 @@
   "name": "dsh-worktable",
   "version": "0.1.0",
   "private": true,
-  "description": "Worktable (工作台) section in the DSH sidebar: a collapsible first-level entry below Workspaces.",
+  "description": "Worktable pane in the DSH sidebar: a first-level section below Workspaces that splits the sidebar body height.",
   "type": "module",
   "exports": {
     ".": "./index.js",
