@@ -50,7 +50,13 @@ window.__ModuleLoader__.load({
      * themes stay consistent. Classes are namespaced under `dsh-worktable`.
      */
     const CSS = [
-      '.dsh-worktable{box-sizing:border-box;display:flex;flex-direction:column;width:100%;min-width:0;margin:2px 0 2px;font-size:14px;line-height:20px;color:var(--dsw-alias-label-primary)}',
+      // The sidebar foot is a flex row shared with other actions. A full-width
+      // entry (this section) must claim its own line so a full-width sibling
+      // such as an activity strip keeps its width instead of being squeezed.
+      // Slot outlets render as `display:contents`, so the row is two DOM levels
+      // above this entry.
+      ':has(> [data-slot="sidebar.footer.action"] > .dsh-worktable){flex-wrap:wrap}',
+      '.dsh-worktable{box-sizing:border-box;display:flex;flex:0 0 100%;flex-direction:column;width:100%;min-width:0;margin:2px 0 2px;font-size:14px;line-height:20px;color:var(--dsw-alias-label-primary)}',
       '.dsh-worktable__header{box-sizing:border-box;display:flex;align-items:center;gap:4px;width:100%;min-width:0;height:36px;padding:0 0 0 0;border-radius:var(--dsw-radius-md);color:var(--dsw-alias-label-tertiary)}',
       '.dsh-worktable__toggle{box-sizing:border-box;display:flex;align-items:center;gap:6px;flex:1;min-width:0;height:28px;padding:0 4px;border:0;border-radius:var(--dsw-radius-sm);background:transparent;color:inherit;font:inherit;text-align:left;cursor:pointer}',
       '.dsh-worktable__toggle:hover{background:var(--dsw-alias-interactive-bg-hover);color:var(--dsw-alias-label-secondary)}',
@@ -62,6 +68,7 @@ window.__ModuleLoader__.load({
       '.dsh-worktable__add:hover{background:var(--dsw-alias-interactive-bg-hover)}',
       '.dsh-worktable__add:focus-visible{outline:var(--dsw-focus-ring-width) solid var(--dsw-focus-ring-color,var(--dsw-alias-state-business-primary));outline-offset:-2px}',
       '.dsh-worktable__list{display:flex;flex-direction:column;gap:2px;min-width:0;padding:0 0 4px}',
+      '.dsh-worktable__list[hidden]{display:none}',
       '.dsh-worktable__empty{padding:10px 12px;color:var(--dsw-alias-label-tertiary);font-size:13px;line-height:18px}',
       '@media (prefers-reduced-motion:reduce){.dsh-worktable__chevron{transition:none}}',
     ].join('\n');
@@ -174,17 +181,17 @@ window.__ModuleLoader__.load({
             addIcon(),
           ),
         ),
-        expanded &&
-          h(
-            'div',
-            {
-              id: LIST_ID,
-              className: 'dsh-worktable__list',
-              role: 'group',
-              'aria-label': t('title'),
-            },
-            h('div', { className: 'dsh-worktable__empty' }, t('empty')),
-          ),
+        h(
+          'div',
+          {
+            id: LIST_ID,
+            className: 'dsh-worktable__list',
+            role: 'group',
+            'aria-label': t('title'),
+            hidden: !expanded,
+          },
+          h('div', { className: 'dsh-worktable__empty' }, t('empty')),
+        ),
       );
     }
 

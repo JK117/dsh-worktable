@@ -45,5 +45,8 @@ node --check client.js
 ## 设计说明
 
 - **落点**：`sidebar` 的工作区浏览区是单个 `single` slot（由 ui-workspace 整体占用），没有可追加的列表座位；其下方唯一的列表座位是 `sidebar.footer.action`，因此入口注册在这里，视觉上正好位于工作区列表与设置行之间。
-- **样式**：复刻自带工作区分区头部（36px 行高、`--dsw-radius-md`、tertiary 标签色、28px 图标按钮与 hover 底色），不读取其他插件的 DOM 或样式表。
-- **本地化**：`ctx.locale.register('dsh-worktable', { zh, en })` 注册字典，slot 注册时传 `locale: 'dsh-worktable'`，组件从注入的 `t` 取文案；`locale/*.json` 只负责插件管理页的标题与描述。
+- **脚部排版**：`sidebar.footer.action` 的容器是横向 flex 行，可能与其它全宽条目（例如会话运行灯条）并排。入口用 `flex: 0 0 100%` 占满一行，并通过 `:has(> [data-slot="sidebar.footer.action"] > .dsh-worktable)` 让该行允许换行，避免挤压同槽位的其它插件；未安装其它条目时行为不变。
+- **样式**：复刻自带工作区分区头部（36px 行高、`--dsw-radius-md`、tertiary 标签色、28px 图标按钮与 hover 底色），只使用 `--dsw-alias-*` 主题 token，不读取其他插件的 DOM 或样式表。
+- **本地化**：`ctx.locale.register('dsh-worktable', { zh, en })` 注册字典，slot 注册时传 `locale: 'dsh-worktable'`，组件从注入的 `t` 取文案；`locale/*.json` 只负责插件管理页的标题与描述。切换语言时 slot 会随 locale revision 重新渲染。
+- **收起态**：侧边栏折叠为 56px 导轨时入口不渲染（`wide === false`），避免在导轨里塞入无法展开的列表。
+- **无障碍**：入口主体是 `<button aria-expanded aria-controls>`，列表是带 `hidden` 的 `role="group"`；添加按钮有 `aria-label` 与本地化 `title` 提示。
