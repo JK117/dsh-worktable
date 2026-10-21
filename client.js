@@ -44,17 +44,18 @@ window.__ModuleLoader__.load({
      * expressed only through `--dsw-alias-*` theme tokens so light and dark
      * themes stay consistent. Classes are namespaced under `dsh-worktable`.
      *
-     * The first rule is the structural part: the sidebar shell declares only a
-     * single `sidebar.workspaces` seat and no sibling section list, so a pane
-     * below it can only start in the foot. Flattening the foot and its action
-     * list (`display: contents`) promotes this pane to a direct child of the
-     * sidebar column, where it shares the body height with the Workspaces
-     * region. Slot outlets already render as `display: contents`, hence the two
-     * DOM levels in the selectors.
+     * The first two rules are the structural part: the sidebar shell declares
+     * only a single `sidebar.workspaces` seat and no sibling section list, so a
+     * pane below it can only start in the foot. Flattening the foot and its
+     * action list (`display: contents`) promotes this pane to a direct child of
+     * the sidebar column; the Workspaces region then takes two thirds of the
+     * body and this pane the remaining third. Slot outlets already render as
+     * `display: contents`, hence the two DOM levels in the selectors.
      */
     const CSS = [
       'div:has(> [data-slot="sidebar.footer.action"] > .dsh-worktable),div:has(> * > [data-slot="sidebar.footer.action"] > .dsh-worktable){display:contents}',
-      '.dsh-worktable{box-sizing:border-box;display:flex;flex:1 1 0;flex-direction:column;width:100%;min-width:0;min-height:0;font-size:14px;line-height:20px;color:var(--dsw-alias-label-primary)}',
+      'div:has(> [data-slot="sidebar.workspaces"]){flex:2 1 0;min-height:0}',
+      '.dsh-worktable{box-sizing:border-box;display:flex;flex:1 1 0;flex-direction:column;width:100%;min-width:0;min-height:0;border-top:.5px solid var(--dsw-alias-border-l1);font-size:14px;line-height:20px;color:var(--dsw-alias-label-primary)}',
       '.dsh-worktable__header{box-sizing:border-box;display:flex;flex:none;align-items:center;gap:4px;width:100%;min-width:0;height:36px;padding:0 4px;color:var(--dsw-alias-label-tertiary)}',
       '.dsh-worktable__label{flex:1;min-width:0;overflow:hidden;white-space:nowrap;text-overflow:ellipsis}',
       '.dsh-worktable__add{box-sizing:border-box;display:inline-flex;flex:none;align-items:center;justify-content:center;width:28px;height:28px;padding:0;border:0;border-radius:var(--dsw-radius-sm);background:transparent;color:var(--dsw-alias-label-secondary);cursor:pointer}',
@@ -62,9 +63,17 @@ window.__ModuleLoader__.load({
       '.dsh-worktable__add:focus-visible{outline:var(--dsw-focus-ring-width) solid var(--dsw-focus-ring-color,var(--dsw-alias-state-business-primary));outline-offset:-2px}',
       '.dsh-worktable__list{box-sizing:border-box;display:flex;flex:1 1 auto;flex-direction:column;min-height:0;overflow-y:auto;padding:0 0 8px}',
       '.dsh-worktable__empty{display:flex;flex:1;align-items:center;justify-content:center;padding:16px 12px;color:var(--dsw-alias-label-tertiary);font-size:13px;line-height:18px;text-align:center}',
+      '.dsh-worktable__tooltip{display:inline-flex;align-items:center;gap:8px;position:fixed;z-index:100;width:max-content;max-width:50vw;padding:3px 7px;border-radius:var(--dsw-radius-sm);background:var(--dsw-alias-tooltip-bg);color:var(--dsw-static-neutral-bluish-00);font-size:13px;line-height:20px;white-space:pre-line;overflow-wrap:break-word;pointer-events:none;animation:dsh-worktable-tooltip-in .15s var(--ds-ease-in-out)}',
+      '.dsh-worktable__tooltip[data-side="bottom"]{transform:translate(-50%)}',
+      '.dsh-worktable__tooltip[data-side="top"]{transform:translate(-50%,-100%)}',
+      '@keyframes dsh-worktable-tooltip-in{0%{opacity:0}}',
+      '@media (prefers-reduced-motion:reduce){.dsh-worktable__tooltip{animation:none}}',
     ].join('\n');
 
-    /** Folder-with-plus glyph matching the shipped "Add workspace" icon size. */
+    /**
+     * The shipped "Add workspace" glyph (`IconProjectAddOutlineRegular`): a
+     * folder outline with a plus in its upper-right corner, 16px, 1px stroke.
+     */
     function addIcon() {
       return h(
         'svg',
@@ -73,19 +82,21 @@ window.__ModuleLoader__.load({
           width: 16,
           height: 16,
           fill: 'none',
+          xmlns: 'http://www.w3.org/2000/svg',
           'aria-hidden': 'true',
+          strokeWidth: 1,
         },
         h('path', {
-          d: 'M1.75 4.25c0-.55.45-1 1-1h3.06c.28 0 .55.12.74.33l1.1 1.28h5.6c.55 0 1 .45 1 1v6.14c0 .55-.45 1-1 1H2.75c-.55 0-1-.45-1-1V4.25Z',
-          stroke: 'currentColor',
-          strokeWidth: 1.2,
-          strokeLinejoin: 'round',
+          d: 'M5.54492 2.06738C5.91034 2.06754 6.26318 2.20149 6.53711 2.44336L7.94043 3.68164V4.7998C7.71462 4.74105 7.50367 4.63139 7.32617 4.47461L5.87598 3.19238C5.78477 3.11185 5.66658 3.06754 5.54492 3.06738H2.94922C2.67322 3.06738 2.44946 3.29145 2.44922 3.56738V12.4326C2.44927 12.7087 2.67311 12.9326 2.94922 12.9326H12.9326C13.2086 12.9325 13.4326 12.7086 13.4326 12.4326V8.53613H14.4326V12.4326C14.4326 13.2609 13.7609 13.9325 12.9326 13.9326H2.94922C2.12083 13.9326 1.44927 13.261 1.44922 12.4326V3.56738C1.44946 2.73916 2.12094 2.06738 2.94922 2.06738H5.54492Z',
+          fill: 'currentColor',
         }),
         h('path', {
-          d: 'M8 7.4v3.4M6.3 9.1h3.4',
+          d: 'M9.75977 4.50208H14.5509',
           stroke: 'currentColor',
-          strokeWidth: 1.2,
-          strokeLinecap: 'round',
+        }),
+        h('path', {
+          d: 'M12.1492 6.89758L12.1492 2.10642',
+          stroke: 'currentColor',
         }),
       );
     }
@@ -96,6 +107,137 @@ window.__ModuleLoader__.load({
      */
     function requestAddWorktable() {}
 
+    /** Hover delay used by the shipped Workspace header's add button. */
+    const ADD_TOOLTIP_DELAY_MS = 500;
+
+    /**
+     * Hover/focus tooltip matching the shipped `Tooltip` bubble: same theme
+     * tokens and type, a 500ms hover delay, bottom placement with an 8px gap,
+     * a 12px viewport inset, and a flip to the top when nothing fits below.
+     * The add action has no shortcut, so no keycap row is rendered.
+     *
+     * @param props - the localized tooltip label and the trigger element.
+     * @returns the trigger plus the bubble while it is open.
+     */
+    function AddTooltip({ label, children }) {
+      const [open, setOpen] = React.useState(false);
+      const [place, setPlace] = React.useState(null);
+      const anchorRef = React.useRef(null);
+      const bubbleRef = React.useRef(null);
+      const timerRef = React.useRef(null);
+      const activeRef = React.useRef({ hover: false, focus: false });
+
+      const clearTimer = React.useCallback(() => {
+        if (timerRef.current !== null) {
+          clearTimeout(timerRef.current);
+          timerRef.current = null;
+        }
+      }, []);
+
+      const placeBubble = React.useCallback(() => {
+        const anchor = anchorRef.current;
+        if (anchor === null) return;
+        const rect = anchor.getBoundingClientRect();
+        const gap = 8;
+        const edge = 12;
+        const bubble = bubbleRef.current;
+        const width = bubble === null ? 0 : bubble.offsetWidth;
+        const height = bubble === null ? 0 : bubble.offsetHeight;
+        const center = rect.left + rect.width / 2;
+        const left = Math.max(
+          edge + width / 2,
+          Math.min(center, window.innerWidth - edge - width / 2),
+        );
+        const fitsBelow = rect.bottom + gap + height <= window.innerHeight - edge;
+        const fitsAbove = rect.top - gap - height >= edge;
+        const side = !fitsBelow && fitsAbove ? 'top' : 'bottom';
+        setPlace({
+          left,
+          top: side === 'bottom' ? rect.bottom + gap : rect.top - gap,
+          side,
+        });
+      }, []);
+
+      const hide = React.useCallback(() => {
+        clearTimer();
+        setOpen(false);
+        setPlace(null);
+      }, [clearTimer]);
+
+      const reveal = React.useCallback(() => {
+        clearTimer();
+        if (open) {
+          // Already visible: a locale change or focus re-entry only re-places it.
+          placeBubble();
+          return;
+        }
+        setPlace(null);
+        setOpen(true);
+      }, [clearTimer, open, placeBubble]);
+
+      React.useEffect(() => {
+        if (!open) return undefined;
+        placeBubble();
+        window.addEventListener('resize', placeBubble);
+        return () => window.removeEventListener('resize', placeBubble);
+      }, [open, label, placeBubble]);
+
+      React.useEffect(() => clearTimer, [clearTimer]);
+
+      const trigger = React.cloneElement(children, {
+        ref: anchorRef,
+        onMouseEnter: () => {
+          activeRef.current.hover = true;
+          clearTimer();
+          timerRef.current = setTimeout(() => {
+            timerRef.current = null;
+            reveal();
+          }, ADD_TOOLTIP_DELAY_MS);
+        },
+        onMouseLeave: () => {
+          activeRef.current.hover = false;
+          clearTimer();
+          if (!activeRef.current.focus) hide();
+        },
+        onFocus: () => {
+          activeRef.current.focus = true;
+          reveal();
+        },
+        onBlur: () => {
+          activeRef.current.focus = false;
+          if (!activeRef.current.hover) hide();
+        },
+        onClick: (event) => {
+          if (typeof children.props.onClick === 'function') {
+            children.props.onClick(event);
+          }
+          activeRef.current.focus = false;
+          hide();
+        },
+      });
+
+      return h(
+        React.Fragment,
+        null,
+        trigger,
+        open &&
+          h(
+            'span',
+            {
+              ref: bubbleRef,
+              className: 'dsh-worktable__tooltip',
+              'data-side': place === null ? 'bottom' : place.side,
+              role: 'tooltip',
+              style:
+                place === null
+                  ? { visibility: 'hidden', left: 0, top: 0 }
+                  : { left: place.left, top: place.top },
+            },
+            label,
+          ),
+      );
+    }
+
     /**
      * The Worktable pane: a static header plus the list area.
      *
@@ -104,7 +246,7 @@ window.__ModuleLoader__.load({
      * @returns the pane, or null while the sidebar is collapsed to its rail.
      */
     function WorktableSection({ wide, t }) {
-      // The rail has no room for a half-height pane.
+      // The rail has no room for a below-the-body pane.
       if (!wide) return null;
 
       return h(
@@ -116,15 +258,18 @@ window.__ModuleLoader__.load({
           { className: 'dsh-worktable__header' },
           h('span', { className: 'dsh-worktable__label' }, t('title')),
           h(
-            'button',
-            {
-              type: 'button',
-              className: 'dsh-worktable__add',
-              'aria-label': t('add'),
-              title: t('add'),
-              onClick: requestAddWorktable,
-            },
-            addIcon(),
+            AddTooltip,
+            { label: t('add') },
+            h(
+              'button',
+              {
+                type: 'button',
+                className: 'dsh-worktable__add',
+                'aria-label': t('add'),
+                onClick: requestAddWorktable,
+              },
+              addIcon(),
+            ),
           ),
         ),
         h(
