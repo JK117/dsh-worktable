@@ -238,10 +238,28 @@ window.__ModuleLoader__.load({
       );
     }
 
-    /** Height of the content mask at the bottom of the Workspace list. */
-    const WORKSPACE_FADE_HEIGHT = 24;
+    /** Height of the content mask at the bottom of a scroll pane. */
+    const CONTENT_FADE_HEIGHT = 24;
     /** Masks the last rows out instead of tinting them with an overlay. */
-    const WORKSPACE_FADE_MASK = `linear-gradient(to bottom, #000 calc(100% - ${WORKSPACE_FADE_HEIGHT}px), transparent)`;
+    const CONTENT_FADE_MASK = `linear-gradient(to bottom, #000 calc(100% - ${CONTENT_FADE_HEIGHT}px), transparent)`;
+
+    /**
+     * Applies or restores the bottom content mask on one scroll pane.
+     *
+     * @param element - the scrolling element, or null while it is missing.
+     * @param active - whether content continues below the viewport.
+     * @param originalMask - the element's inline mask before this hook ran.
+     * @param originalWebkitMask - the element's inline WebKit mask.
+     */
+    function applyContentMask(element, active, originalMask, originalWebkitMask) {
+      if (element === null) return;
+      const mask = active ? CONTENT_FADE_MASK : originalMask;
+      const webkitMask = active ? CONTENT_FADE_MASK : originalWebkitMask;
+      if (element.style.maskImage !== mask) element.style.maskImage = mask;
+      if (element.style.webkitMaskImage !== webkitMask) {
+        element.style.webkitMaskImage = webkitMask;
+      }
+    }
 
     /**
      * Fades the Workspaces list content near its bottom edge while more rows
@@ -294,13 +312,7 @@ window.__ModuleLoader__.load({
         }
 
         function applyMask(active) {
-          if (scroller === null) return;
-          const mask = active ? WORKSPACE_FADE_MASK : originalMask;
-          const webkitMask = active ? WORKSPACE_FADE_MASK : originalWebkitMask;
-          if (scroller.style.maskImage !== mask) scroller.style.maskImage = mask;
-          if (scroller.style.webkitMaskImage !== webkitMask) {
-            scroller.style.webkitMaskImage = webkitMask;
-          }
+          applyContentMask(scroller, active, originalMask, originalWebkitMask);
         }
 
         function bind(next) {
@@ -360,6 +372,67 @@ window.__ModuleLoader__.load({
     }
 
     /**
+     * Applies the same bottom content mask to this pane's own list.
+     *
+     * Unlike the Workspaces scroller, this element belongs to the plugin, so it
+     * needs no discovery or platform gate: the mask follows its own overflow
+     * and is restored when the pane collapses or unmounts.
+     *
+     * @param ref - ref to the scrolling list element.
+     * @param enabled - whether the pane is rendered.
+     */
+    function useContentFade(ref, enabled) {
+      React.useEffect(() => {
+        const scroller = ref.current;
+        if (!enabled || scroller === null) return undefined;
+
+        const originalMask = scroller.style.maskImage;
+        const originalWebkitMask = scroller.style.webkitMaskImage;
+        let frame = 0;
+
+        function schedule() {
+          if (frame === 0) frame = requestAnimationFrame(measure);
+        }
+
+        function measure() {
+          frame = 0;
+          const hasMore = scroller.scrollHeight > scroller.clientHeight + 1;
+          const atBottom =
+            scroller.scrollTop + scroller.clientHeight >= scroller.scrollHeight - 1;
+          applyContentMask(
+            scroller,
+            hasMore && !atBottom,
+            originalMask,
+            originalWebkitMask,
+          );
+        }
+
+        scroller.addEventListener('scroll', schedule, { passive: true });
+        const resizeObserver = new ResizeObserver(schedule);
+        resizeObserver.observe(scroller);
+        const observer = new MutationObserver(schedule);
+        observer.observe(scroller, {
+          childList: true,
+          subtree: true,
+          characterData: true,
+          attributes: true,
+          attributeFilter: ['class', 'data-state'],
+        });
+        window.addEventListener('resize', schedule);
+        schedule();
+
+        return () => {
+          if (frame !== 0) cancelAnimationFrame(frame);
+          observer.disconnect();
+          resizeObserver.disconnect();
+          window.removeEventListener('resize', schedule);
+          scroller.removeEventListener('scroll', schedule);
+          applyContentMask(scroller, false, originalMask, originalWebkitMask);
+        };
+      }, [ref, enabled]);
+    }
+
+    /**
      * The Worktable pane: a static header plus the list area.
      *
      * @param props - the slot's `wide` owner prop (`false` in the 56px rail)
@@ -367,7 +440,9 @@ window.__ModuleLoader__.load({
      * @returns the pane, or null while the sidebar is collapsed to its rail.
      */
     function WorktableSection({ wide, t }) {
+      const listRef = React.useRef(null);
       useWorkspaceFade(wide);
+      useContentFade(listRef, wide);
 
       // The rail has no room for a below-the-body pane.
       if (!wide) return null;
@@ -398,6 +473,7 @@ window.__ModuleLoader__.load({
         h(
           'div',
           {
+            ref: listRef,
             className: 'dsh-worktable__list',
             role: 'group',
             'aria-label': t('title'),
